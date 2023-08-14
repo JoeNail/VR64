@@ -1,0 +1,102 @@
+print("Started")
+local VrPlayer = "" -- The username of the player in VR who is being tracked
+local ServerURL = "" -- The Ngrok websocket server URL
+
+local HttpService = game:GetService("HttpService")
+local WebSocket = websocket.Connect(ServerURL)
+
+function Register(Client0)
+	local data = {
+		["Reg1"] = Client0,
+	}
+	WebSocket:Send(HttpService:JSONEncode(data))
+end
+
+Register("Recorder")
+
+function SendTo(Client0, Instance0, Value0)
+	local data = {
+		["To1"] = Client0,
+		["Instance1"] = Instance0,
+		["Value1"] = Value0,
+	}
+	WebSocket:Send(HttpService:JSONEncode(data))
+end
+
+
+local NAME_COLORS =
+	{
+		Color3.new(253/255, 41/255, 67/255), -- BrickColor.new("Bright red").Color,
+		Color3.new(1/255, 162/255, 255/255), -- BrickColor.new("Bright blue").Color,
+		Color3.new(2/255, 184/255, 87/255), -- BrickColor.new("Earth green").Color,
+		BrickColor.new("Bright violet").Color,
+		BrickColor.new("Bright orange").Color,
+		BrickColor.new("Bright yellow").Color,
+		BrickColor.new("Light reddish violet").Color,
+		BrickColor.new("Brick yellow").Color,
+	}
+
+local function GetNameValue(pName)
+	local value = 0
+	for index = 1, #pName do
+		local cValue = string.byte(string.sub(pName, index, index))
+		local reverseIndex = #pName - index + 1
+		if #pName%2 == 1 then
+			reverseIndex = reverseIndex - 1
+		end
+		if reverseIndex%4 >= 2 then
+			cValue = -cValue
+		end
+		value = value + cValue
+	end
+	return value
+end
+
+local color_offset = 0
+local function ComputeNameColor(pName)
+	return NAME_COLORS[((GetNameValue(pName) + color_offset) % #NAME_COLORS) + 1]
+end
+
+
+WebSocket.OnMessage:Connect(function(msg)
+	local msgtable = HttpService:JSONDecode(msg)
+	print("Got: ".. msgtable["Instance1"])
+	if msgtable["Instance1"] == "PlayersPlam" then
+		loadstring(msgtable["Value1"])()
+	elseif msgtable["Instance1"] == "PlayersChat" then
+		local messages = {}
+		for line in msgtable["Value1"]:gmatch("[^\r\n]+") do
+			local name, msg = line:match("(%S+)%s(.+)")
+			if name and msg then
+				table.insert(messages, {Name = name, Msg = msg})
+			end
+		end
+		for _, message in ipairs(messages) do
+			game.Workspace.Server.chat:FireServer(message.Name, message.Msg, ComputeNameColor(message.Name))
+		end
+	end
+end)
+
+--RS = game:GetService("RunService")
+--RS.Stepped:Connect(function()
+while wait(.15) do
+	local VrPlayerPlam0 = "{"
+	VrPlayerPlam0 = VrPlayerPlam0.. "\n['map'] = '".. workspace.Server.Map.Value.. "',"
+	VrPlayerPlam0 = VrPlayerPlam0.. "\n['hat'] = ".. workspace.Server.Hat.Value.. ","
+	VrPlayerPlam0 = VrPlayerPlam0.. "\n['skin'] = ".. workspace.Server.Skin.Value.. ","
+	VrPlayerPlam0 = VrPlayerPlam0.. "\n['scale'] = Vector3.new(1,1,1),"
+	if workspace.fakes:FindFirstChild(VrPlayer) then
+		for i, limb in pairs(workspace.fakes:FindFirstChild(VrPlayer):GetChildren()) do
+			if limb.Name ~= 'trs' and limb.Name ~= 'dot' then
+				if limb.Name == "torso" then
+					VrPlayerPlam0 = VrPlayerPlam0.. "\n['".. limb.Name.. "'] = CFrame.new(".. tostring(limb.CFrame).. "),"
+				else
+					VrPlayerPlam0 = VrPlayerPlam0.. "\n['".. limb.Name.. "'] = CFrame.new(".. tostring(limb.CFrame - limb.CFrame.Position).. "),"
+				end
+			end
+		end
+	end
+	VrPlayerPlam0 = ",\n[2] = ".. VrPlayerPlam0.. "\n},\n}))"
+	SendTo("Sender", "VrPlayerPlam", VrPlayerPlam0)
+end
+--end)
